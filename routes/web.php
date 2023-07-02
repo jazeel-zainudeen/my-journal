@@ -29,14 +29,17 @@ Route::group(['middleware' => 'auth'], function () {
     Route::get('delete/{ticket_id}', [TicketController::class, 'delete'])->name('ticket.delete');
     Route::get('get_ticket/{ticket_id}', [TicketController::class, 'get_ticket'])->name('ticket.get_ticket');
     Route::post('edit', [TicketController::class, 'edit'])->name('ticket.edit');
-    Route::get('collect/{ticket_id}', [TicketController::class, 'mark_collected'])->name('ticket.collect');
+    Route::get('collect/{ticket_id}', [TicketController::class, 'collect_balance'])->name('ticket.collect');
+    Route::get('bulk_collect/{ticket_id}', [TicketController::class, 'bulk_collect_balance']);
     Route::get('get_collection_balance/{reference_id}', [TicketController::class, 'get_collection_balance']);
     Route::get('generate_report', [TicketController::class, 'generate_report']);
+    Route::get('list_ticket_by_reference/{reference_id}', [TicketController::class, 'list_ticket_by_reference']);
 
     Route::get('settlements', [SettlementController::class, 'index'])->name('settlements');
     Route::get('list_settlements', [SettlementController::class, 'list_settlements']);
     Route::get('settle_balance/{supplier_id}', [SettlementController::class, 'settle_balance']);
     Route::get('list_transactions/{supplier_id}', [SettlementController::class, 'list_transactions']);
+    Route::get('list_unsettled_tickets/{supplier_id}', [SettlementController::class, 'list_unsettled_tickets']);
 
     Route::get('day-sheet', [DaySheetController::class, 'index'])->name('day-sheet');
     Route::post('daysheet/save', [DaySheetController::class, 'save'])->name('daysheet.save');

@@ -6,6 +6,7 @@ use App\Models\Ticket;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 use Faker\Factory as Faker;
+use Illuminate\Support\Facades\App;
 
 class DatabaseSeeder extends Seeder
 {
@@ -28,52 +29,53 @@ class DatabaseSeeder extends Seeder
             'name' => 'Walk In'
         ]);
 
-        $faker = Faker::create();
+        if (App::environment('local', 'development')) {
+            $faker = Faker::create();
 
-        for ($i = 1; $i <= 5; $i++) {
-            Supplier::create([
-                'name' => $faker->randomElement(['Global', 'Express', 'Adventures', 'Discover', 'Journey', 'Explore', 'Voyage', 'Destination']) . ' Travels',
-                'total_payable' => 0.00,
-            ]);
+            for ($i = 1; $i <= 5; $i++) {
+                Supplier::create([
+                    'name' => $this->generateUniqueSupplierName($faker),
+                    'total_payable' => 0.00,
+                ]);
+            }
+
+            for ($i = 1; $i <= 5; $i++) {
+                Reference::create([
+                    'name' => $faker->name,
+                ]);
+            }
+
+            $supplierIds = Supplier::pluck('id')->all();
+            $referenceIds = Reference::pluck('id')->all();
+
+            // Generate random tickets
+            for ($i = 1; $i <= 25; $i++) {
+                $supplierId = $supplierIds[array_rand($supplierIds)];
+                $referenceId = $referenceIds[array_rand($referenceIds)];
+
+                $departureDate = $faker->dateTimeBetween('-30 days', '+30 days');
+                $returnDate = $faker->dateTimeBetween($departureDate, '+30 days');
+
+                $ticket = Ticket::create([
+                    'ticket_number' => $this->generateUniqueTicketNumber(),
+                    'created_at' => $faker->dateTimeBetween('-7 days', 'now'),
+                    'departure_date' => $departureDate,
+                    'return_date' => $returnDate,
+                    'customer_name' => $faker->name,
+                    'supplier_id' => $supplierId,
+                    'reference_id' => $referenceId,
+                    'total' => rand(100, 500),
+                    'profit' => rand(20, 100),
+                    'cost' => rand(50, 200),
+                ]);
+
+                // Update supplier's total_payable
+                $supplier = Supplier::find($supplierId);
+                $supplier->total_payable += $ticket->cost;
+                $supplier->save();
+            }
         }
 
-        for ($i = 1; $i <= 5; $i++) {
-            Reference::create([
-                'name' => $faker->name,
-            ]);
-        }
-
-        $supplierIds = Supplier::pluck('id')->all();
-
-        // Get all reference IDs
-        $referenceIds = Reference::pluck('id')->all();
-
-        // Generate random tickets
-        for ($i = 1; $i <= 25; $i++) {
-            $supplierId = $supplierIds[array_rand($supplierIds)];
-            $referenceId = $referenceIds[array_rand($referenceIds)];
-
-            $departureDate = $faker->dateTimeBetween('-30 days', '+30 days');
-            $returnDate = $faker->dateTimeBetween($departureDate, '+30 days');
-
-            $ticket = Ticket::create([
-                'ticket_number' => $this->generateUniqueTicketNumber(),
-                'created_at' => $faker->dateTimeBetween('-7 days', 'now'),
-                'departure_date' => $departureDate,
-                'return_date' => $returnDate,
-                'customer_name' => $faker->name,
-                'supplier_id' => $supplierId,
-                'reference_id' => $referenceId,
-                'total' => rand(100, 500),
-                'profit' => rand(20, 100),
-                'cost' => rand(50, 200),
-            ]);
-
-            // Update supplier's total_payable
-            $supplier = Supplier::find($supplierId);
-            $supplier->total_payable += $ticket->cost;
-            $supplier->save();
-        }
     }
 
     private function generateUniqueTicketNumber()
@@ -86,5 +88,15 @@ class DatabaseSeeder extends Seeder
         }
 
         return $ticketNumber;
+    }
+
+    private function generateUniqueSupplierName($faker)
+    {
+        $random_names = ['Global', 'Express', 'Adventures', 'Discover', 'Journey', 'Explore', 'Voyage', 'Destination'];
+        $supplierName = $faker->randomElement($random_names) . ' Travels';
+        while (Supplier::where('name', $supplierName)->exists()) {
+            $supplierName = $faker->randomElement($random_names) . ' Travels';
+        }
+        return $supplierName;
     }
 }

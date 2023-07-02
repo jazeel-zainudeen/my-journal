@@ -26,67 +26,156 @@ function loadTable() {
             $('.settle-btn').click(function (e) {
                 let pending_balance = $(this).data('sbal');
                 let supplier_id = $(this).data('id');
+                let swal_title = 'Settle Balance<br><p class="fs-6 mt-2">(Pending: ' + pending_balance.toLocaleString('en-SA', { style: 'currency', currency: 'SAR' }) + ')</p>';
 
-                Swal.fire({
-                    title: 'Settle Balance<br><p class="fs-6 mt-2">(Pending: ' + pending_balance.toLocaleString('en-SA', { style: 'currency', currency: 'SAR' }) + ')</p>',
-                    input: 'text',
-                    inputAttributes: {
-                        'data-inputmask': "'alias': 'currency', 'prefix':'SAR '",
-                        autocapitalize: 'off'
-                    },
-                    didOpen: () => {
-                        $(".swal2-input").inputmask();
-                    },
-                    showCancelButton: true,
-                    confirmButtonText: 'Settle Amount',
-                    showLoaderOnConfirm: true,
-                    preConfirm: (value) => {
-                        value = value.replace(/[^0-9.-]+/g, "");
+                $.ajax({
+                    url: '/list_unsettled_tickets/' + supplier_id,
+                    method: 'get',
+                    success: function (response) {
+                        // if (response.length == 0) {
 
-                        if (parseFloat(value) > pending_balance) {
-                            Swal.showValidationMessage('The entered value exceeds the maximum balance.');
-                            return false;
-                        }
+                        //     return false;
+                        // }
 
-                        if (value == 0) {
-                            Swal.showValidationMessage('The entered value is invalid.');
-                            return false;
-                        }
+                        let swal_html = `<div class="table-responsive">
+                        <table class="table table-hover align-middle">
+                        <thead>
+                            <tr>
+                                <th>Customer Name</th>
+                                <th>Balance</th>
+                                <th>Settlement Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>`;
 
-                        return fetch(`/settle_balance/${supplier_id}?settlement_amount=${value}`)
-                            .then(response => {
-                                if (!response.ok) {
-                                    throw new Error(response.statusText)
-                                }
-
-                                return response.json()
-                            })
-                            .catch(error => {
-                                Swal.showValidationMessage(
-                                    `Request failed: ${error}`
-                                )
-                            })
-                    },
-                    allowOutsideClick: () => !Swal.isLoading()
-                }).then((result) => {
-                    if (result.isConfirmed) {
-                        loadTable();
-                        const Toast = Swal.mixin({
-                            toast: true,
-                            position: 'top-end',
-                            showConfirmButton: false,
-                            timer: 3000,
-                            timerProgressBar: true,
+                        response.forEach(row => {
+                            swal_html += `<tr>
+                                <td>${row.customer_name}</td>
+                                <td>${row.balance} of ${row.cost}</td>
+                                <td><input type="text" class="form-control form-control-xs swal-custom-input" data-inputmask="'alias': 'currency', 'prefix':'SAR '" data-id="${row.id}" data-balance="${row.balance}" data-name="${row.customer_name}"></td>
+                            </tr>`;
                         });
 
-                        let pending_balance = result.value.total_payable;
-                        Toast.fire({
-                            icon: 'success',
-                            title: 'Success',
-                            text: 'Settlement successfully marked. Pending balance: ' + pending_balance.toLocaleString('en-SA', { style: 'currency', currency: 'SAR' })
+                        swal_html += `</tbody></table></div>`;
+
+                        Swal.fire({
+                            title: swal_title,
+                            input: 'text',
+                            inputAttributes: {
+                                'data-inputmask': "'alias': 'currency', 'prefix':'SAR '",
+                                autocapitalize: 'off'
+                            },
+                            didOpen: () => {
+                                $(".swal2-input").inputmask();
+                                $(".swal-custom-input").inputmask();
+                                $('.swal2-input').on('input', () => {
+                                    let totalSettlement = $('.swal2-input').val();
+                                    totalSettlement = totalSettlement.replace(/[^0-9.-]+/g, "");
+
+                                    let inputFields = $('.swal-custom-input');
+                                    let remainingBalance = totalSettlement;
+                                    inputFields.each(function (index) {
+                                        let balance = parseFloat($(this).data('balance'));
+                                        let amountToFill = Math.min(balance, remainingBalance);
+                                        $(this).val(amountToFill.toFixed(2));
+                                        remainingBalance -= amountToFill;
+                                    });
+                                })
+
+                                $('.swal-custom-input').on('input', () => {
+                                    let inputFields = $('.swal-custom-input');
+                                    let sum = 0;
+                                    inputFields.each(function () {
+                                        let value = $(this).val().replace(/[^0-9.-]+/g, "");
+                                        if (value)
+                                            sum += parseFloat(value);
+                                    });
+
+                                    $('.swal2-input').val(sum.toFixed(2));
+                                });
+                            },
+                            showCancelButton: true,
+                            confirmButtonText: 'Settle Amount',
+                            showLoaderOnConfirm: true,
+                            html: swal_html,
+                            preConfirm: (value) => {
+                                value = value.replace(/[^0-9.-]+/g, "");
+
+                                let inputFields = $('.swal-custom-input');
+                                let flag = false;
+                                let flag_name = '';
+                                inputFields.each(function () {
+                                    let input = parseFloat($(this).val().replace(/[^0-9.-]+/g, ""));
+                                    let balance = parseFloat($(this).data('balance'));
+                                    if (input > balance) {
+                                        flag = true;
+                                        flag_name = $(this).data('name');
+                                        return false;
+                                    }
+                                });
+
+                                if (flag) {
+                                    Swal.showValidationMessage('Invalid Settlement Amount for&nbsp;<b>' + flag_name + '</b>');
+                                    return false;
+                                }
+
+                                if (parseFloat(value) > pending_balance) {
+                                    Swal.showValidationMessage('The entered value exceeds the maximum balance.');
+                                    return false;
+                                }
+
+                                if (value == 0) {
+                                    Swal.showValidationMessage('Please enter a settlement amount.');
+                                    return false;
+                                }
+
+                                var params = new URLSearchParams();
+                                params.append('settlement_amount', value);
+                                $('.swal-custom-input').each(function () {
+                                    var dataId = $(this).data('id');
+                                    var amount = $(this).val().replace(/[^0-9.-]+/g, "");
+                                    if (amount != 0) {
+                                        params.append(`settlements[${dataId}]`, amount);
+                                    }
+                                });
+
+                                return fetch(`/settle_balance/${supplier_id}?${params.toString()}`)
+                                    .then(response => {
+                                        if (!response.ok) {
+                                            throw new Error(response.statusText)
+                                        }
+
+                                        return response.json()
+                                    })
+                                    .catch(error => {
+                                        Swal.showValidationMessage(
+                                            `Request failed: ${error}`
+                                        )
+                                    })
+                            },
+                            allowOutsideClick: () => !Swal.isLoading()
+                        }).then((result) => {
+                            if (result.isConfirmed) {
+                                loadTable();
+                                const Toast = Swal.mixin({
+                                    toast: true,
+                                    position: 'top-end',
+                                    showConfirmButton: false,
+                                    timer: 3000,
+                                    timerProgressBar: true,
+                                });
+
+                                let pending_balance = result.value.total_payable;
+                                Toast.fire({
+                                    icon: 'success',
+                                    title: 'Success',
+                                    text: 'Settlement successfully marked. Pending balance: ' + pending_balance.toLocaleString('en-SA', { style: 'currency', currency: 'SAR' })
+                                })
+                            }
                         })
                     }
                 })
+
             })
 
             $('.view-history-btn').click(function () {
@@ -98,6 +187,7 @@ function loadTable() {
                     autoWidth: true,
                     ajax: '/list_transactions/' + supplier_id,
                     columns: [
+                        { data: 'ticket.customer_name' },
                         { data: 'amount' },
                         { data: 'created_at' }
                     ],
@@ -106,11 +196,21 @@ function loadTable() {
                         "width": "1%",
                         "searchable": false
                     }],
-                    order: [
-                        [1, 'desc']
-                    ]
+                    order: []
                 });
                 $('#view-history-modal').modal('show');
+            })
+
+            $('.view-tickets-btn').click(function () {
+                let supplier_id = $(this).data('id');
+                sessionStorage.clear();
+
+                let filters = {
+                    suppliers: [supplier_id]
+                };
+                sessionStorage.setItem('filters', JSON.stringify(filters));
+
+                window.location.href = '/';
             })
         },
         footerCallback: function (row, data, start, end, display) {
@@ -134,5 +234,10 @@ $(function ($) {
     'use strict';
 
     loadTable();
+
+    flatpickr(".flatpickr-input", {
+        dateFormat: 'F j, Y',
+        mode: 'range'
+    });
 });
 

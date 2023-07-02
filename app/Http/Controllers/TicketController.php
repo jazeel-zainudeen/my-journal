@@ -9,6 +9,7 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Yajra\DataTables\DataTables;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Support\Facades\Session;
 use Illuminate\Support\Facades\Storage;
 
 class TicketController extends Controller
@@ -45,16 +46,18 @@ class TicketController extends Controller
         }
 
         if ($request->date) {
-            $formattedDate = Carbon::createFromFormat('F d, Y h:i A', $request->date);
+            $formattedDate = Carbon::createFromFormat('F d, Y', $request->date);
         }
+
+
 
         $ticket = new Ticket();
         $ticket->customer_name = $request->customer_name;
         if ($request->return_date) {
-            $ticket->return_date = Carbon::createFromFormat('F d, Y h:i A', $request->return_date);
+            $ticket->return_date = Carbon::createFromFormat('F d, Y', $request->return_date);
         }
         if ($request->departure_date) {
-            $ticket->departure_date = Carbon::createFromFormat('F d, Y h:i A', $request->departure_date);
+            $ticket->departure_date = Carbon::createFromFormat('F d, Y', $request->departure_date);
         }
         $ticket->reference_id = $referenceId;
         $ticket->supplier_id = $supplierId;
@@ -136,21 +139,21 @@ class TicketController extends Controller
                 ->addIndexColumn()
                 ->editColumn('created_at', function ($row) {
                     if ($row->created_at) {
-                        return Carbon::parse($row->created_at)->format('d F, Y h:i A');
+                        return Carbon::parse($row->created_at)->format('d F, Y');
                     } else {
                         return '';
                     }
                 })
                 ->editColumn('return_date', function ($row) {
                     if ($row->return_date) {
-                        return Carbon::parse($row->return_date)->format('d F, Y h:i A');
+                        return Carbon::parse($row->return_date)->format('d F, Y');
                     } else {
                         return '';
                     }
                 })
                 ->editColumn('departure_date', function ($row) {
                     if ($row->departure_date) {
-                        return Carbon::parse($row->departure_date)->format('d F, Y h:i A');
+                        return Carbon::parse($row->departure_date)->format('d F, Y');
                     } else {
                         return '';
                     }
@@ -172,11 +175,10 @@ class TicketController extends Controller
                     return 'SAR ' . number_format($row->total, 2);
                 })
                 ->editColumn('collection_amount', function ($row) {
-                    if ($row->collection_amount != $row->total) {
-                        return '<div class="text-danger">SAR ' . number_format($row->collection_amount, 2) . '</div>';
-                    } else {
-                        return '<div class="text-success">SAR ' . number_format($row->collection_amount, 2) . '</div>';
+                    if ($row->refunded_at != '') {
+                        return 'SAR ' . number_format(-$row->collection_amount, 2);
                     }
+                    return 'SAR ' . number_format($row->collection_amount, 2);
                 })
                 ->addColumn('cost_amount', function ($row) {
                     return $row->cost;
@@ -188,38 +190,67 @@ class TicketController extends Controller
                     return $row->total;
                 })
                 ->addColumn('collect_amount', function ($row) {
+                    if ($row->refunded_at != '') {
+                        return -$row->collection_amount;
+                    }
                     return $row->collection_amount;
+                })
+                ->addColumn('balance_amt', function ($row) {
+                    if ($row->refunded_at != '') {
+                        return $row->collection_amount + $row->extra_charges;
+                    } else {
+                        return $row->total - $row->collection_amount;
+                    }
                 })
                 ->addColumn('action', function ($row) {
                     $data = '';
+
+                    $balance_amt = $row->refunded_at != '' ? $row->collection_amount + $row->extra_charges : $row->total - $row->collection_amount;
+
                     $data = '<div class="d-flex align-items-baseline justify-content-center">';
-                    if ($row->collection_amount != $row->total) {
-                        $data .= '<a href="' . route('ticket.collect', $row->id) . '" title="Mark as Collected" class="text-success p-1 confirm-link"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-check-square"><polyline points="9 11 12 14 22 4"></polyline><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg></a>';
+                    if ($balance_amt != 0) {
+                        $data .= '<button type="button" title="Mark as Collected" class="btn btn-none text-success p-1 mark-collected-action" data-ticket-id="' . $row->id . '" data-balance="' . $balance_amt . '"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-check-square"><polyline points="9 11 12 14 22 4"></polyline><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg></button>';
                     }
                     $data .= '<a href="' . route('ticket.delete', $row->id) . '" title="Delete" class="text-danger p-1 confirm-link"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-trash-2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg></a>';
                     $data .= '<button title="Edit" data-ticket-id="' . $row->id . '" class="btn btn-none text-primary p-1 edit-ticket-link"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-edit"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg></button>';
                     if ($row->refunded_at == '') {
-                        $data .= '<a href="' . route('ticket.refund', $row->id) . '" title="Mark as Refunded" class="text-warning p-1 confirm-link"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-refresh-ccw"><polyline points="1 4 1 10 7 10"></polyline><polyline points="23 20 23 14 17 14"></polyline><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"></path></svg></a>';
+                        $data .= '<button type="button" data-ticket-id="' . $row->id . '" title="Mark as Refunded" class="btn btn-none text-warning p-1 refund-link"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-refresh-ccw"><polyline points="1 4 1 10 7 10"></polyline><polyline points="23 20 23 14 17 14"></polyline><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"></path></svg></button>';
                     }
                     $data .= '</div>';
                     return $data;
                 })
-                ->rawColumns(['action', 'collection_amount'])
+                ->addColumn('balance_amount', function ($row) {
+                    if ($row->refunded_at != '') {
+                        return 'SAR ' . number_format($row->collection_amount + $row->extra_charges, 2);
+                    }
+                    if ($row->collection_amount != $row->total) {
+                        return '<div class="text-danger">SAR ' . number_format($row->total - $row->collection_amount, 2) . '</div>';
+                    } else {
+                        return '<div class="text-success">SAR ' . number_format($row->total - $row->collection_amount, 2) . '</div>';
+                    }
+                })
+                ->rawColumns(['action', 'balance_amount'])
                 ->make(true);
         }
         return redirect()->route('/');
     }
 
-    public function mark_refunded($id)
+    public function mark_refunded(Request $request, $id)
     {
-        $ticket = Ticket::find($id);
+        $ticket = Ticket::findOrFail($id);
+        $ticket->collection_amount = -$ticket->collection_amount;
+        $ticket->extra_charges = $request->amount;
         $ticket->refunded_at = now();
         $ticket->save();
+
+        // $ticket->decrement('collection_amount', $ticket->total);
 
         $supplier = Supplier::find($ticket->supplier_id);
         $supplier->decrement('total_payable', $ticket->cost);
 
-        return redirect()->back()->with('message', 'Ticket refunded successfully.');
+        Session::flash('message', 'Ticket refunded successfully.');
+
+        return response()->json([]);
     }
 
     public function delete($id)
@@ -274,15 +305,15 @@ class TicketController extends Controller
         }
 
         if ($request->date) {
-            $formattedDate = Carbon::createFromFormat('F d, Y h:i A', $request->date);
+            $formattedDate = Carbon::createFromFormat('F d, Y', $request->date);
         }
 
         $ticket->customer_name = $request->customer_name;
         if ($request->return_date) {
-            $ticket->return_date = Carbon::createFromFormat('F d, Y h:i A', $request->return_date);
+            $ticket->return_date = Carbon::createFromFormat('F d, Y', $request->return_date);
         }
         if ($request->departure_date) {
-            $ticket->departure_date = Carbon::createFromFormat('F d, Y h:i A', $request->departure_date);
+            $ticket->departure_date = Carbon::createFromFormat('F d, Y', $request->departure_date);
         }
         $ticket->reference_id = $referenceId;
         $ticket->supplier_id = $supplierId;
@@ -303,18 +334,24 @@ class TicketController extends Controller
         return redirect()->back()->with('message', 'Ticket edited successfully.');
     }
 
-    public function mark_collected($id)
+    public function collect_balance(Request $request, $id)
     {
         $ticket = Ticket::find($id);
-        $ticket->collection_amount = $ticket->total;
+        if ($ticket->refunded_at == '') {
+            $collection_amount = $ticket->collection_amount + $request->amount;
+        } else {
+            $collection_amount = -$ticket->collection_amount + $request->amount;
+        }
+        $ticket->collection_amount = $collection_amount;
         $ticket->save();
 
-        return redirect()->back()->with('message', 'Ticket amount collected successfully.');
+        Session::flash('message', 'Ticket amount collected successfully.');
+        return response()->json([], 200);
     }
 
     public function get_collection_balance($id)
     {
-        $totalPendingAmount = Ticket::where('reference_id', $id)->sum('cost') - Ticket::where('reference_id', $id)->sum('collection_amount');
+        $totalPendingAmount = Ticket::where('reference_id', $id)->sum('total') - Ticket::where('reference_id', $id)->sum('collection_amount');
 
         if ($totalPendingAmount == 0) {
             return response()->json(['message' => '']);
@@ -400,5 +437,24 @@ class TicketController extends Controller
             'success' => true,
             'url' => Storage::disk('public')->url($folderPath . $filename)
         ]);
+    }
+
+    public function list_ticket_by_reference($reference_id)
+    {
+        $tickets = Ticket::whereRaw('collection_amount != total')->where('reference_id', $reference_id)->get();
+
+        return response()->json($tickets);
+    }
+
+    public function bulk_collect_balance(Request $request, $reference_id)
+    {
+        foreach ($request->collections as $ticket_id => $amount) {
+            $ticket = Ticket::findOrFail($ticket_id);
+            $ticket->collection_amount += $amount;
+            $ticket->save();
+        }
+
+        Session::flash('message', 'Ticket amount collected successfully.');
+        return response()->json($request, 200);
     }
 }

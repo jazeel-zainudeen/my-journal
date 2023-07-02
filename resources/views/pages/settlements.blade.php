@@ -16,6 +16,10 @@
         .select2-container--default .select2-selection--single .select2-selection__rendered {
             min-height: 36px;
         }
+
+        .swal2-popup {
+            width: 46em;
+        }
     </style>
 @endpush
 
@@ -33,6 +37,21 @@
                 <div class="card-body">
                     <div class="d-flex align-items-center justify-content-between mb-4">
                         <h6 class="card-title mb-0">Settlements</h6>
+                        {{-- <div class="input-group flatpickr wd-250 me-2 mb-2 mb-md-0">
+                            <span class="input-group-text input-group-addon bg-transparent border-primary"
+                                data-toggle=""><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"
+                                    viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                    stroke-linecap="round" stroke-linejoin="round"
+                                    class="feather feather-calendar text-primary">
+                                    <rect x="3" y="4" width="18" height="18" rx="2"
+                                        ry="2"></rect>
+                                    <line x1="16" y1="2" x2="16" y2="6"></line>
+                                    <line x1="8" y1="2" x2="8" y2="6"></line>
+                                    <line x1="3" y1="10" x2="21" y2="10"></line>
+                                </svg></span>
+                            <input type="text" class="form-control bg-transparent border-primary flatpickr-input active"
+                                placeholder="Select date" data-input="" readonly="readonly">
+                        </div> --}}
                     </div>
 
                     <div>
@@ -73,6 +92,7 @@
                     <table id="history-datatable" class="table w-100">
                         <thead>
                             <tr>
+                                <th>Customer Name</th>
                                 <th>Transaction Amount</th>
                                 <th>Transacted At</th>
                             </tr>

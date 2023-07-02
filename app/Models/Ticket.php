@@ -19,4 +19,9 @@ class Ticket extends Model
     {
         return $this->belongsTo(Reference::class);
     }
+
+    public function settlements()
+    {
+        return $this->hasMany(Settlement::class);
+    }
 }
