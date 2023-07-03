@@ -46,6 +46,7 @@ function loadTable() {
             { data: 'total' },
             { data: 'collection_amount' },
             { data: 'balance_amount' },
+            { data: 'extra_charges' },
             { data: 'refunded_at' },
             { data: 'action' },
         ],
@@ -266,13 +267,14 @@ function loadTable() {
         footerCallback: function (row, data, start, end, display) {
             var api = this.api(), data;
 
-            let costTotal = 0.0, collectionTotal = 0.0, grossTotal = 0.0, profitTotal = 0.0, pendingTotal = 0.0;
+            let costTotal = 0.0, collectionTotal = 0.0, grossTotal = 0.0, profitTotal = 0.0, pendingTotal = 0.0, refundChargeTotal = 0.0;
             $.each(data, function (i, value) {
                 collectionTotal += parseFloat(value.collect_amount);
                 costTotal += parseFloat(value.cost_amount);
                 grossTotal += parseFloat(value.total_amount);
                 profitTotal += parseFloat(value.profit_amount);
                 pendingTotal += parseFloat(value.balance_amt);
+                refundChargeTotal += parseFloat(value.extra_charge_amt);
             })
 
             $(api.column(7).footer()).html(formatCurrency(costTotal));
@@ -280,6 +282,7 @@ function loadTable() {
             $(api.column(9).footer()).html(formatCurrency(grossTotal));
             $(api.column(10).footer()).html(formatCurrency(collectionTotal));
             $(api.column(11).footer()).html(formatCurrency(pendingTotal));
+            $(api.column(12).footer()).html(formatCurrency(refundChargeTotal));
         }
     });
     $('#dataTableExample').each(function () {
@@ -566,13 +569,21 @@ $('#bulk-collect').on('click', () => {
 
             let total = 0;
             response.forEach(row => {
-                let balance = row.total - row.collection_amount;
+                let balance = 0.0;
+                let subtotal = 0.0;
+                if(!row.refunded_at){
+                    balance = parseFloat(row.total) - parseFloat(row.collection_amount);
+                    subtotal = parseFloat(row.total);
+                } else {
+                    balance = parseFloat(row.collection_amount) + parseFloat(row.extra_charges);
+                    subtotal = parseFloat(row.total) + parseFloat(row.extra_charges);
+                }
                 swal_html += `<tr>
                     <td>${row.customer_name}</td>
-                    <td>${balance} of ${row.total}</td>
+                    <td>${balance} of ${subtotal}</td>
                     <td><input type="text" class="form-control form-control-xs swal-custom-input" data-inputmask="'alias': 'currency', 'prefix':'SAR '" data-id="${row.id}" data-balance="${balance}" data-name="${row.customer_name}"></td>
                 </tr>`;
-                total += balance;
+                total += parseFloat(balance);
             });
 
             swal_html += `</tbody></table></div>`;
@@ -636,6 +647,11 @@ $('#bulk-collect').on('click', () => {
 
                     if (flag) {
                         Swal.showValidationMessage('Invalid Collection Amount for&nbsp;<b>' + flag_name + '</b>');
+                        return false;
+                    }
+
+                    if (parseFloat(value) < total) {
+                        Swal.showValidationMessage('The entered value is less than maximum balance.');
                         return false;
                     }
 

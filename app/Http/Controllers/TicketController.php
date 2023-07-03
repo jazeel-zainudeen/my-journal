@@ -172,11 +172,14 @@ class TicketController extends Controller
                     return 'SAR ' . number_format($row->profit, 2);
                 })
                 ->editColumn('total', function ($row) {
+                    if ($row->refunded_at != '') {
+                        return 'SAR ' . number_format($row->total - $row->extra_charges, 2);
+                    }
                     return 'SAR ' . number_format($row->total, 2);
                 })
                 ->editColumn('collection_amount', function ($row) {
                     if ($row->refunded_at != '') {
-                        return 'SAR ' . number_format(-$row->collection_amount, 2);
+                        return 'SAR ' . number_format(- ($row->collection_amount + $row->extra_charges), 2);
                     }
                     return 'SAR ' . number_format($row->collection_amount, 2);
                 })
@@ -187,20 +190,16 @@ class TicketController extends Controller
                     return $row->profit;
                 })
                 ->addColumn('total_amount', function ($row) {
+                    if ($row->refunded_at != '') {
+                        return $row->total - $row->extra_charges;
+                    }
                     return $row->total;
                 })
                 ->addColumn('collect_amount', function ($row) {
                     if ($row->refunded_at != '') {
-                        return -$row->collection_amount;
+                        return - ($row->collection_amount + $row->extra_charges);
                     }
                     return $row->collection_amount;
-                })
-                ->addColumn('balance_amt', function ($row) {
-                    if ($row->refunded_at != '') {
-                        return $row->collection_amount + $row->extra_charges;
-                    } else {
-                        return $row->total - $row->collection_amount;
-                    }
                 })
                 ->addColumn('action', function ($row) {
                     $data = '';
@@ -229,6 +228,27 @@ class TicketController extends Controller
                         return '<div class="text-success">SAR ' . number_format($row->total - $row->collection_amount, 2) . '</div>';
                     }
                 })
+                ->addColumn('balance_amt', function ($row) {
+                    if ($row->refunded_at != '') {
+                        return $row->collection_amount + $row->extra_charges;
+                    } else {
+                        return $row->total - $row->collection_amount;
+                    }
+                })
+                ->editColumn('extra_charges', function ($row) {
+                    if ($row->refunded_at != '') {
+                        return 'SAR ' . number_format($row->extra_charges, 2);
+                    } else {
+                        return '';
+                    }
+                })
+                ->editColumn('extra_charge_amt', function ($row) {
+                    if ($row->refunded_at != '') {
+                        return $row->extra_charges;
+                    } else {
+                        return 0;
+                    }
+                })
                 ->rawColumns(['action', 'balance_amount'])
                 ->make(true);
         }
@@ -238,7 +258,7 @@ class TicketController extends Controller
     public function mark_refunded(Request $request, $id)
     {
         $ticket = Ticket::findOrFail($id);
-        $ticket->collection_amount = -$ticket->collection_amount;
+        $ticket->collection_amount = - ($ticket->collection_amount - $request->amount);
         $ticket->extra_charges = $request->amount;
         $ticket->refunded_at = now();
         $ticket->save();
@@ -340,7 +360,7 @@ class TicketController extends Controller
         if ($ticket->refunded_at == '') {
             $collection_amount = $ticket->collection_amount + $request->amount;
         } else {
-            $collection_amount = -$ticket->collection_amount + $request->amount;
+            $collection_amount = $ticket->collection_amount - $request->amount;
         }
         $ticket->collection_amount = $collection_amount;
         $ticket->save();
@@ -450,7 +470,12 @@ class TicketController extends Controller
     {
         foreach ($request->collections as $ticket_id => $amount) {
             $ticket = Ticket::findOrFail($ticket_id);
-            $ticket->collection_amount += $amount;
+            if ($ticket->refunded_at == '') {
+                $collection_amount = $ticket->collection_amount + $amount;
+            } else {
+                $collection_amount = -$ticket->collection_amount + $amount;
+            }
+            $ticket->collection_amount = $collection_amount;
             $ticket->save();
         }
 

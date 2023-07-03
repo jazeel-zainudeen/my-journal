@@ -221,6 +221,7 @@
                                         <th>Total</th>
                                         <th>Collected Amount</th>
                                         <th>Balance Amount</th>
+                                        <th>Refund Charges</th>
                                         <th>Refunded At</th>
                                         <th>Action</th>
                                     </tr>
@@ -234,6 +235,7 @@
                                         <th></th>
                                         <th></th>
                                         <th style="text-align: right !important;">Total:</th>
+                                        <th></th>
                                         <th></th>
                                         <th></th>
                                         <th></th>

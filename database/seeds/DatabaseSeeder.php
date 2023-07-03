@@ -21,8 +21,8 @@ class DatabaseSeeder extends Seeder
 
         \App\Models\User::insert([
             'name' => 'Admin',
-            'email' => 'manish@journal.com',
-            'password' => Hash::make('u4GZzgmNpKNTKU3QMYRQ2#3R')
+            'email' => 'maneesh@journal.com',
+            'password' => Hash::make('maneesh@2023')
         ]);
 
         \App\Models\Reference::insert([
